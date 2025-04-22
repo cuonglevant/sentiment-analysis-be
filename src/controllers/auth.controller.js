@@ -7,10 +7,21 @@ const Role = db.role;
 
 export const signup = async (req, res) => {
   try {
-    const { email, password, roles } = req.body;
+    const { name, email, password, roles } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required.' });
+    }
+    
+    // Check if email already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email is already in use.' });
+    }
 
     const user = new User({
-      email,
+      name,
+      email: email.toLowerCase(),
       password: bcrypt.hashSync(password, 8),
     });
 
@@ -25,7 +36,7 @@ export const signup = async (req, res) => {
     }
 
     await savedUser.save();
-    res.send({ message: "User was registered successfully!" });
+    res.status(201).json({ message: "User registered successfully!" });
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
@@ -33,20 +44,30 @@ export const signup = async (req, res) => {
 
 export const signin = async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.body.email }).populate(
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required.' });
+    }
+    
+    const user = await User.findOne({ email: email.toLowerCase() }).populate(
       "roles",
       "-__v"
     );
-    if (!user) return res.status(404).send({ message: "User Not found." });
-    if (!bcrypt.compareSync(req.body.password, user.password)) {
-      return res
-        .status(401)
-        .send({ accessToken: null, message: "Invalid Password!" });
+    
+    if (!user) {
+      return res.status(400).json({ message: "Invalid email or password." });
     }
+    
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(400).json({ message: "Invalid email or password." });
+    }
+    
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: 86400,
+      expiresIn: 86400, // 24 hours
     });
-    res.status(200).send({
+    
+    res.status(200).json({
       id: user._id,
       email: user.email,
       roles: user.roles,
@@ -60,8 +81,8 @@ export const signin = async (req, res) => {
 export const signout = (req, res) => {
   try {
     req.session = null;
-    res.status(200).send({ message: "You've been signed out!" });
+    res.status(200).json({ message: "You've been signed out!" });
   } catch (err) {
-    res.status(500).send({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
